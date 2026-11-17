@@ -28,6 +28,15 @@ def parser():
     capacity.add_argument("at")
     timeline = sub.add_parser("timeline")
     timeline.add_argument("job_id")
+    wait = sub.add_parser("wait")
+    wait.add_argument("job_id")
+    wait.add_argument("--upto")
+    equipment = sub.add_parser("equipment")
+    equipment.add_argument("equipment_id")
+    equipment_report = sub.add_parser("equipment-report")
+    equipment_report.add_argument("product")
+    equipment_report.add_argument("start")
+    equipment_report.add_argument("end")
     report = sub.add_parser("report")
     report.add_argument("product")
     report.add_argument("start")
@@ -65,6 +74,12 @@ def main(argv=None):
             result = service.capacity(args.design_id, args.quantity, args.at)
         elif args.command == "timeline":
             result = service.job_timeline(args.job_id)
+        elif args.command == "wait":
+            result = service.job_wait(args.job_id, args.upto)
+        elif args.command == "equipment":
+            result = service.get_equipment(args.equipment_id)
+        elif args.command == "equipment-report":
+            result = service.equipment_report(args.product, args.start, args.end)
         elif args.command == "report":
             result = service.report(args.product, args.start, args.end)
         elif args.command == "publish":

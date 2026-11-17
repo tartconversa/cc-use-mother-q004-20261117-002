@@ -14,6 +14,14 @@ CycleFlow 面向样机研发团队，接收设计修订、部件批次、生产�
 
 事件类型包括 `design.release`、`design.retire`、`lot.receive`、`lot.quarantine`、`job.open`、`job.stage_start`、`job.stage_finish`、`job.scrap`、`plan.create` 和 `test.record`。设计包含产品、版本、部件数量及可选的父版本。部件批次包含料号、供应商和正整数数量。工单绑定一个设计和产量，成功预留物料后依次经过加工、装配和集成。试验计划绑定精确的产品版本，受测数量必须覆盖该工单全部单位。
 
+## 设备占用与排队
+
+多条产线共用的测试设备通过 `equipment.*` 事件记录：`equipment.register` 登记设备（工位、可选归属产线），`equipment.enqueue`/`equipment.withdraw` 记录工单开始排队或放弃，`equipment.acquire`/`equipment.release` 记录占用区间（acquire 自动闭合该工单的排队），`equipment.reserve`/`equipment.rebook` 记录预约时段及其变更，`equipment.down`/`equipment.up` 记录停机区间。设备事件只新增事实，不改写工序时长与试验结果。
+
+占用与停机按 `occurred_at` 区间校验，与事件到达顺序无关：任何与既有占用区间相交的 acquire（包括乱序补录）都会被拒绝，因此同一设备在任何时刻只会分派给一个工单；停机时段内的 acquire 同样被拒绝。预约时段在同一设备上不得重叠，改约会保留被替换的原时段。缺少设备或工单的事件进入待处理状态，补齐后可重试。
+
+`/jobs/{job_id}/wait` 给出单个工单的可归因等待：每段排队被分解为 `downtime`（设备停机）、`contention`（他单占用，列出占用工单）、`reservation_change`（本单预约被推迟）和 `idle_device`（设备空闲、设备侧无法解释）四类，并附占用与预约明细及来源事件编号。`/reports/{product}/equipment` 面向主管：按 ISO 周（跨周区间在周一零点切分）、设计版本和设备拆解瓶颈，设备行的 `down_seconds` 是设备级事实、从不分摊到任何产线，工单明细标记仍在等待交付的工单（`blocking_delivery`），可从汇总逐层追到具体工单。`/equipment/{equipment_id}` 返回设备的占用、排队、停机与预约全量区间。`/quality/audit` 同时校验设备区间互斥、停机配对和预约不重叠。
+
 ## 报表与发布
 
 请求 `/reports/{product}?window_start=...&window_end=...` 获取当前视图。时间窗含起点、不含终点，以工单创建时间决定归属。报表提供按版本汇总、良率、工序时长、等待时长、来源事件编号和质量问题。周度、返工分组、瓶颈和供应商视图使用相同的已接受事实。供应商试验归因可以重叠，不能跨供应商直接求和。

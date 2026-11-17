@@ -22,6 +22,7 @@ class IntegrityAudit:
             findings.extend(self._lot_checks(db))
             findings.extend(self._job_checks(db, product))
             findings.extend(self._test_checks(db, product))
+            findings.extend(self._equipment_checks(db))
             findings.extend(self._release_checks(db, product))
             findings.sort(key=lambda item: (item["code"], item["subject"]))
             return {"product": product, "checked_event_head": db.execute(
@@ -132,6 +133,53 @@ class IntegrityAudit:
                 findings.append(self._issue("test_plan_revision", subject))
             if test["status"] not in ("completed", "failed"):
                 findings.append(self._issue("test_job_status", subject))
+        return findings
+
+    def _equipment_checks(self, db):
+        findings = []
+        for row in db.execute("SELECT equipment_id FROM equipment ORDER BY equipment_id"):
+            equipment_id = row["equipment_id"]
+            occupancy = list(db.execute(
+                "SELECT * FROM equipment_occupancy WHERE equipment_id=? ORDER BY acquired_at,id",
+                (equipment_id,)))
+            for item in occupancy:
+                if item["released_at"] and item["released_at"] < item["acquired_at"]:
+                    findings.append(self._issue("occupancy_order", equipment_id))
+                clash = db.execute(
+                    "SELECT COUNT(*) FROM equipment_downtime WHERE equipment_id=?"
+                    " AND down_at<=? AND (up_at IS NULL OR up_at>?)",
+                    (equipment_id, item["acquired_at"], item["acquired_at"])).fetchone()[0]
+                if clash:
+                    findings.append(self._issue("acquired_while_down", equipment_id))
+            for previous, current in zip(occupancy, occupancy[1:]):
+                if previous["released_at"] is None or current["acquired_at"] < previous["released_at"]:
+                    findings.append(self._issue("occupancy_overlap", equipment_id))
+            downtime = list(db.execute(
+                "SELECT * FROM equipment_downtime WHERE equipment_id=? ORDER BY down_at,id",
+                (equipment_id,)))
+            for item in downtime:
+                if item["up_at"] and item["up_at"] < item["down_at"]:
+                    findings.append(self._issue("downtime_order", equipment_id))
+            for previous, current in zip(downtime, downtime[1:]):
+                if previous["up_at"] is None or current["down_at"] < previous["up_at"]:
+                    findings.append(self._issue("downtime_overlap", equipment_id))
+            active = list(db.execute(
+                "SELECT * FROM equipment_reservations WHERE equipment_id=? AND state='active'"
+                " ORDER BY slot_start,id", (equipment_id,)))
+            for previous, current in zip(active, active[1:]):
+                if current["slot_start"] < previous["slot_end"]:
+                    findings.append(self._issue("reservation_overlap", equipment_id))
+            for item in db.execute(
+                    "SELECT * FROM equipment_reservations WHERE equipment_id=?", (equipment_id,)):
+                if item["slot_end"] <= item["slot_start"]:
+                    findings.append(self._issue("reservation_slot", equipment_id))
+        for row in db.execute(
+                "SELECT equipment_id,job_id,COUNT(*) c FROM equipment_queue"
+                " WHERE closed_at IS NULL GROUP BY equipment_id,job_id HAVING c>1"):
+            findings.append(self._issue("queue_overlap", f"{row['equipment_id']}/{row['job_id']}"))
+        for row in db.execute(
+                "SELECT * FROM equipment_queue WHERE closed_at IS NOT NULL AND closed_at<enqueued_at"):
+            findings.append(self._issue("queue_order", f"{row['equipment_id']}/{row['job_id']}"))
         return findings
 
     def _release_checks(self, db, product):

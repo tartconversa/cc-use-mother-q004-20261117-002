@@ -1,4 +1,5 @@
 from .analytics import CycleAnalytics
+from .attribution import EquipmentAnalytics
 from .audit import IntegrityAudit
 from .batch import BatchReceiver
 from .contracts import DomainError
@@ -23,6 +24,7 @@ class CycleService:
         self.audit_engine = IntegrityAudit(self.store)
         self.operations = OperationsView(self.store)
         self.throughput = ThroughputView(self.store)
+        self.equipment_view = EquipmentAnalytics(self.store)
 
     def ingest(self, event):
         return self.ledger.ingest(event)
@@ -97,3 +99,12 @@ class CycleService:
 
     def cohorts(self, product, start, end):
         return self.throughput.cohorts(product, start, end)
+
+    def equipment_report(self, product, start, end):
+        return self.equipment_view.equipment_report(product, start, end)
+
+    def job_wait(self, job_id, upto=None):
+        return self.equipment_view.job_wait(job_id, upto)
+
+    def get_equipment(self, equipment_id):
+        return self.equipment_view.equipment_detail(equipment_id)

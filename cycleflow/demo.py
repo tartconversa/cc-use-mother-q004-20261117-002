@@ -40,6 +40,15 @@ def scenario():
     ]
 
 
+def equipment_scenario():
+    return [
+        event(13, "equipment.register", 0, {"equipment_id": "RIG-1", "station": "integration"}),
+        event(14, "equipment.enqueue", 16, {"equipment_id": "RIG-1", "job_id": "J1"}),
+        event(15, "equipment.acquire", 21, {"equipment_id": "RIG-1", "job_id": "J1"}),
+        event(16, "equipment.release", 27, {"equipment_id": "RIG-1", "job_id": "J1"}),
+    ]
+
+
 def run():
     with tempfile.TemporaryDirectory() as directory:
         db = Path(directory) / "cycleflow.sqlite3"
@@ -55,9 +64,21 @@ def run():
         assert frozen["report"]["summary"]["pass_rate"] == "0.75"
         audit = IntegrityAudit(service.store).run("robot-arm")
         assert audit["ok"], audit
+        equipment_outcomes = [service.ingest(item) for item in equipment_scenario()]
+        assert all(item["state"] == "accepted" for item in equipment_outcomes), equipment_outcomes
+        wait = service.job_wait("J1")
+        assert wait["by_cause"]["idle_device"] == 300, wait
+        assert wait["occupancy"][0]["seconds"] == 360, wait
+        view = service.equipment_report("robot-arm", START, END)
+        assert view["totals"]["by_cause"]["idle_device"] == 300, view
+        assert view["devices"][0]["occupied_seconds"] == 360, view
+        final_audit = IntegrityAudit(service.store).run("robot-arm")
+        assert final_audit["ok"], final_audit
         return {"batch": {"first_cursor": first["next_line"], "complete": rest["completed"]},
                 "report": report["summary"], "quality": report["quality"],
-                "release_id": frozen["release_id"], "audit": audit}
+                "release_id": frozen["release_id"], "audit": final_audit,
+                "equipment": {"job_wait_by_cause": wait["by_cause"],
+                              "devices": [d["equipment_id"] for d in view["devices"]]}}
 
 
 def main():

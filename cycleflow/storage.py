@@ -53,6 +53,44 @@ CREATE TABLE IF NOT EXISTS releases (
 CREATE TABLE IF NOT EXISTS batches (
   batch_id TEXT PRIMARY KEY, manifest TEXT NOT NULL, next_line INTEGER NOT NULL,
   total_lines INTEGER NOT NULL, state TEXT NOT NULL, updated_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS equipment (
+  equipment_id TEXT PRIMARY KEY, station TEXT NOT NULL, line TEXT,
+  registered_at TEXT NOT NULL);
+CREATE TABLE IF NOT EXISTS equipment_occupancy (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  equipment_id TEXT NOT NULL REFERENCES equipment(equipment_id),
+  job_id TEXT NOT NULL REFERENCES jobs(job_id),
+  acquired_at TEXT NOT NULL, released_at TEXT,
+  acquire_event_id INTEGER NOT NULL REFERENCES events(id),
+  release_event_id INTEGER REFERENCES events(id));
+CREATE INDEX IF NOT EXISTS ix_occupancy_equipment ON equipment_occupancy(equipment_id, acquired_at);
+CREATE INDEX IF NOT EXISTS ix_occupancy_job ON equipment_occupancy(job_id);
+CREATE TABLE IF NOT EXISTS equipment_queue (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  equipment_id TEXT NOT NULL REFERENCES equipment(equipment_id),
+  job_id TEXT NOT NULL REFERENCES jobs(job_id),
+  enqueued_at TEXT NOT NULL, closed_at TEXT, close_kind TEXT,
+  enqueue_event_id INTEGER NOT NULL REFERENCES events(id),
+  close_event_id INTEGER REFERENCES events(id));
+CREATE INDEX IF NOT EXISTS ix_queue_equipment ON equipment_queue(equipment_id, enqueued_at);
+CREATE INDEX IF NOT EXISTS ix_queue_job ON equipment_queue(job_id);
+CREATE TABLE IF NOT EXISTS equipment_downtime (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  equipment_id TEXT NOT NULL REFERENCES equipment(equipment_id),
+  reason TEXT NOT NULL, down_at TEXT NOT NULL, up_at TEXT,
+  down_event_id INTEGER NOT NULL REFERENCES events(id),
+  up_event_id INTEGER REFERENCES events(id));
+CREATE INDEX IF NOT EXISTS ix_downtime_equipment ON equipment_downtime(equipment_id, down_at);
+CREATE TABLE IF NOT EXISTS equipment_reservations (
+  id INTEGER PRIMARY KEY AUTOINCREMENT,
+  equipment_id TEXT NOT NULL REFERENCES equipment(equipment_id),
+  job_id TEXT NOT NULL REFERENCES jobs(job_id),
+  slot_start TEXT NOT NULL, slot_end TEXT NOT NULL,
+  previous_slot_start TEXT, previous_slot_end TEXT,
+  state TEXT NOT NULL, created_at TEXT NOT NULL, superseded_at TEXT,
+  created_event_id INTEGER NOT NULL REFERENCES events(id),
+  superseded_event_id INTEGER REFERENCES events(id));
+CREATE INDEX IF NOT EXISTS ix_reservations_equipment ON equipment_reservations(equipment_id, slot_start);
 """
 
 

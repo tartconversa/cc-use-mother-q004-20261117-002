@@ -3,6 +3,7 @@ import sqlite3
 
 from .contracts import DomainError, MissingDependency, fingerprint, keys, required_text, stable_json, timestamp, utc_now
 from .design import DesignRules
+from .equipment import EquipmentRules
 from .execution import ExecutionRules
 from .inventory import InventoryRules
 from .measure import MeasurementRules
@@ -12,6 +13,9 @@ KINDS = {
     "design.release", "design.retire", "lot.receive", "lot.quarantine",
     "job.open", "job.stage_start", "job.stage_finish", "job.scrap",
     "plan.create", "test.record",
+    "equipment.register", "equipment.enqueue", "equipment.withdraw",
+    "equipment.acquire", "equipment.release", "equipment.down", "equipment.up",
+    "equipment.reserve", "equipment.rebook",
 }
 
 
@@ -66,6 +70,8 @@ class EventLedger:
                 detail = InventoryRules(db).dispatch(kind, payload, row["occurred_at"])
             elif kind.startswith("job."):
                 detail = ExecutionRules(db).dispatch(kind, payload, row["occurred_at"], event_id)
+            elif kind.startswith("equipment."):
+                detail = EquipmentRules(db).dispatch(kind, payload, row["occurred_at"], event_id)
             else:
                 detail = MeasurementRules(db).dispatch(kind, payload, row["occurred_at"], event_id)
             db.execute("RELEASE SAVEPOINT project_event")

@@ -97,6 +97,18 @@ def create_app(db_path=None):
     def job_timeline(job_id: str):
         return service.job_timeline(job_id)
 
+    @app.get("/jobs/{job_id}/wait")
+    def job_wait(job_id: str, upto: str | None = None):
+        return service.job_wait(job_id, upto)
+
+    @app.get("/equipment/{equipment_id}")
+    def equipment(equipment_id: str):
+        return service.get_equipment(equipment_id)
+
+    @app.get("/reports/{product}/equipment")
+    def equipment_report(product: str, window_start: str, window_end: str):
+        return service.equipment_report(product, window_start, window_end)
+
     @app.get("/designs/{design_id}/capacity")
     def capacity(design_id: str, quantity: int, at: str):
         return service.capacity(design_id, quantity, at)
